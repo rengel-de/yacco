@@ -6,6 +6,10 @@ defmodule Yacco.MixProject do
       app: :yacco,
       version: "0.1.0",
       elixir: "~> 1.9",
+      build_embedded: Mix.env == :prod,
+      start_permanent: Mix.env == :prod,
+      description: description(),
+      package: package(),
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: [:phoenix, :gettext] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
@@ -34,6 +38,7 @@ defmodule Yacco.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:ex_doc, "~> 0.14", only: :dev, runtime: false},
       {:phoenix, "~> 1.5.4"},
       {:phoenix_html, "~> 2.11"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
@@ -73,7 +78,7 @@ defmodule Yacco.MixProject do
       name: "yacco",
       # These are the default files included in the package
       files: ~w(.formatter.exs mix.exs README.md COPYRIGHT*
-                 .gitignore assets lib test),
+                 .gitignore assets/javascript lib test),
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => "https://github.com/rengel-de/yacco"}
     ]

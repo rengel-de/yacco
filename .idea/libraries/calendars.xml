@@ -1,7 +1,11 @@
 <component name="libraryTable">
   <library name="calendars" type="mix">
-    <CLASSES />
+    <CLASSES>
+      <root url="file://$PROJECT_DIR$/_build/dev/lib/calendars/ebin" />
+    </CLASSES>
     <JAVADOC />
-    <SOURCES />
+    <SOURCES>
+      <root url="file://$PROJECT_DIR$/deps/calendars/lib" />
+    </SOURCES>
   </library>
 </component>
