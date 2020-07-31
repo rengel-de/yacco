@@ -72,5 +72,7 @@
     <orderEntry type="library" name="cowlib" level="project" />
     <orderEntry type="library" name="ranch" level="project" />
     <orderEntry type="library" name="Python 3.7 (Elixir) interpreter library" level="application" />
+    <orderEntry type="library" name="calixir" level="project" />
+    <orderEntry type="library" name="calendars" level="project" />
   </component>
 </module>

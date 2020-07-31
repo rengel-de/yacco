@@ -5,12 +5,13 @@ defmodule Yacco.MixProject do
     [
       app: :yacco,
       version: "0.1.0",
-      elixir: "~> 1.7",
+      elixir: "~> 1.9",
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: [:phoenix, :gettext] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      source_url: "https://github.com/rengel-de/yacco"
     ]
   end
 
@@ -41,8 +42,18 @@ defmodule Yacco.MixProject do
       {:telemetry_poller, "~> 0.4"},
       {:gettext, "~> 0.11"},
       {:jason, "~> 1.0"},
-      {:plug_cowboy, "~> 2.0"}
+      {:plug_cowboy, "~> 2.0"},
+      {:calixir, "~> 0.1.0"},
+      {:calendars, "~> 0.1.0"}
     ]
+  end
+
+  defp description() do
+    """
+    Yacco (Yet another calendar converter) is an ELixir/Phoenix application
+    that allows the conversion of calendar dates of the calendars contained
+    in the packages Calixir and Calendars.
+    """
   end
 
   # Aliases are shortcuts or tasks specific to the current project.
@@ -56,4 +67,16 @@ defmodule Yacco.MixProject do
       setup: ["deps.get", "cmd npm install --prefix assets"]
     ]
   end
+
+  defp package() do
+    [
+      name: "yacco",
+      # These are the default files included in the package
+      files: ~w(.formatter.exs mix.exs README.md COPYRIGHT*
+                 .gitignore assets lib test),
+      licenses: ["Apache-2.0"],
+      links: %{"GitHub" => "https://github.com/rengel-de/yacco"}
+    ]
+  end
+
 end
