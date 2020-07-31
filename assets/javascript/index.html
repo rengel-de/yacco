@@ -1,0 +1,1346 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html lang="en">
+<head>
+
+<meta charset="utf-8">
+<title>c3</title>
+
+<meta name="keywords" content="c3, calendar, converter, Julian, Gregorian, Unix, ISO, JavaScript">
+<meta name="description" content="Calendar Cross Converter">
+<meta name="author" content="Reinhard Engel">
+<meta name="robots" content="index">
+
+<style>
+    body {
+        background-color: white;
+    }
+
+    body.main {
+        margin-left: 15%;
+        margin-right: 10%;
+    }
+
+    input {
+        /*font-family: courier;*/
+        text-align: center;
+        padding-right: 5px;
+        padding-left: 5px;
+    }
+
+    input.ro {
+        text-align: center;
+        background-color: wheat;
+        border: 0;
+    }
+
+    .code {
+        font-weight: normal;
+        font-family: courier;
+    }
+
+    input.rocode {
+        text-align: left;
+        background-color: wheat;
+        border: 0;
+    }
+
+    .jscode {
+        font-weight: normal;
+        font-family: courier;
+    }
+
+    .jsinfo {
+        width: 85%;
+        border: none;
+        text-align: left;
+        background-color: wheat;
+        padding-left: 5px;
+    }
+
+    .single {
+        text-align: right;
+        padding-right: 5px;
+    }
+
+    table {
+        text-align: left;
+        padding: 5px;
+        width: 100%;
+        border: 1px;
+        border-style: solid;
+        border-color: black;
+        background-color: #D0D0D0;
+    }
+
+    table.inner {
+        border: none;
+    }
+
+    tr {
+        border: 2px;
+        border-color: red;
+    }
+
+    table tr {
+        font-weight: bold;
+    }
+
+    th {
+        padding: 5px;
+        border: 1px;
+        border-style: solid;
+        border-color: red;
+    }
+
+    tr td {
+        font-weight: bold;
+        width: 23%;
+    }
+
+    td {
+        padding: 5px;
+        border-style: solid;
+        border: 0px;
+        text-align: left;
+        /*
+        border-top: 0px;
+        border-bottom: 0px;
+        border-left: 1px;
+        border-right: 1px;
+        */
+        /*border-color: green;*/
+    }
+
+    td.title {
+        width: 20%;
+    }
+
+    td.jscode{
+        /*width: 8%;*/
+    }
+
+    td.inner2 {
+        width: 90%;
+    }
+
+    td.data {
+        width: 75%;
+        font_weight: normal;
+    }
+
+    td.action {
+        width: 5%;
+    }
+</style>
+
+<!--
+<script language="JavaScript" src="c3.js"></script>
+-->
+
+<script>
+
+// c3 -- Calendar Cross Converter
+
+//TODO: Millis eleminieren
+
+/*  Eliminate the quirks and insanities of JavaScript Date handling
+    - months 0..11 will be translated into as 1..12
+    - years 1-99 will be handled as 1..9, not as 1901..1999
+*/
+
+var c = console;
+
+//===== base Calendar
+var c3 = function () {
+
+    var UNIX_EPOCH = 2440587.5;       // Julian Day of Unix Epoch: 1970-01-01:00:00:00
+    var JS_EPOCH = UNIX_EPOCH;        // Julian Day of JavaScript Epoch
+    var MJD_EPOCH  = 2400000.5;       // Epoch of Modified Julian Date system
+    var SECONDS_PER_DAY = 86400.0;    // 24 * 60 * 60;
+    var MILLIS_PER_DAY =  86400000.0; // SECONDS_PER_DAY * 1000;
+
+    var WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday",
+        "Thursday", "Friday", "Saturday"];
+
+    // Return units as parts dictionary
+    function get_parts(units) {
+        //console.log("get_parts - in", units, typeof units, arguments.length);
+
+        units = units || {};
+        var dic, values, i, n = arguments.length;
+
+        function copy_dic(arg) {
+            var dic = {};
+            dic.year = arg.year || 0;
+            dic.month = arg.month || 0;
+            dic.day = arg.day || 0;
+            dic.hour = arg.hour || 0;
+            dic.min = arg.min || 0;
+            dic.sec = arg.sec || 0;
+            dic.millis = arg.millis || 0;
+            return dic;
+        }
+
+        function make_dic(values) {
+            var dic = {};
+            values = values.concat([0, 0, 0, 0, 0, 0, 0]);
+            dic.year = values[0];
+            dic.month = values[1];
+            dic.day = values[2];
+            dic.hour = values[3];
+            dic.min = values[4];
+            dic.sec = values[5];
+            dic.millis = values[6];
+            return dic;
+        }
+
+        if (Array.isArray(units)) { //OK
+            //console.log("   isArray");
+            values = [].concat(units);
+            dic = make_dic(values);
+        } else if (n > 1) {
+            //console.log("   n > 1");
+            values = [];
+            for (i = 0; i < n; i++) {
+                values.push(arguments[i]);
+            }
+            dic = make_dic(values);
+        } else if (n === 1 && typeof units === "number") {
+            //console.log("   n === 1 && number");
+            values = [units];
+            dic = make_dic(values);
+        } else if (n === 1 && typeof units[0] === "number") {
+            //console.log("   n === 1 && units[0] is number");
+            values = [];
+            n = units.length;  // NOT arguments!!!
+            for (i = 0; i < n; i++) {
+                values.push(units[i]);
+            }
+            dic = make_dic(values);
+        } else {
+            //console.log("   is dic");
+            dic = copy_dic(units);
+        }
+        //console.log("get_parts - ex", dic);
+        return dic;
+    }
+
+    // Convert Year, Month, Day, Hour, Min, Sec, Millis to Date
+    function parts_to_date(parts) {
+        //console.log("parts_to_date - in", parts);
+        var millis = Date.UTC(
+                        parts.year,
+                        parts.month - 1,
+                        parts.day,
+                        parts.hour,
+                        parts.min,
+                        parts.sec,
+                        parts.millis),
+                date = new Date(millis);
+        date.setUTCFullYear(parts.year);
+        //console.log("parts_to_date - ex", date);
+        return date;
+    }
+
+    // Convert Parts (Year, Month, Day, Hour, Min, Sec, Millis) to Time
+    function parts_to_time(parts) {
+        //console.log("parts_to_time - in", parts);
+        var time = +parts_to_date(parts);
+        //console.log("parts_to_time - ex", time);
+        return time;
+    }
+
+    // Weekday number of Julian Day
+    function weekday(jd) {
+        var wd = Math.floor(jd + 1.5);
+        return wd - (7 * Math.floor(wd / 7));
+    }
+
+    // Return Julian Day of given weekday (0 = Sunday)
+    // in the seven days ending on jd.
+    function weekday_before(wday, jd) {
+        return jd - weekday(jd - wday);
+    }
+
+    // search_weekday  --  Determine the Julian date for:
+    //    weekday      Day of week desired, 0 = Sunday
+    //    jd           Julian date to begin search
+    //    direction    1 = next weekday, -1 = last weekday
+    //    offset       Offset from jd to begin search
+    function search_weekday(weekday, jd, direction, offset) {
+        return weekday_before(weekday, jd + (direction * offset));
+    }
+
+    function next_weekday(weekday, jd) {
+        return search_weekday(weekday, jd, 1, 7);
+    }
+
+    function previous_weekday(weekday, jd) {
+        return search_weekday(weekday, jd, -1, 1);
+    }
+
+    var c3 = { version: 0.1 };
+
+    // jsdate -- Create sane date with reasonable month and year
+    c3.jsdate = function (year, month, day, hour, min, sec, millis) {
+        console.log("c3.date - in", year, month, day, hour, min, sec, millis);
+        var date, ms;
+        if (arguments.length === 0) {
+            date = new Date(); // use JavaScript function
+        } else {
+            ms = Date.UTC(
+                    year,
+                    (month - 1) || 0,
+                    day || 0,
+                    hour || 0,
+                    min || 0,
+                    sec || 0,
+                    millis ||0
+            );
+            date = new Date(millis);
+            date.setUTCFullYear(year);
+        }
+        console.log("c3.date - ex", date, assert, hmsOut);
+        return date;
+    };
+
+    // jstime -- Create sane time with reasonable month and year
+    c3.jstime = function (year, month, day, hour, min, sec, millis) {
+        return +c3.jsdate(year, month, day, hour, min, sec, millis);
+    };
+
+    c3.now = function () {
+        return c3.jsdate();
+    };
+
+    c3.unix_epoch = function () {
+        return UNIX_EPOCH;
+    };
+
+    c3.javascript_epoch = function () {
+        return JS_EPOCH;
+    };
+
+    c3.mjd_epoch = function () {
+        return MJD_EPOCH;
+    };
+
+    // Convert civil to astronomical time
+    c3.timeparts_to_jd = function (hour, min, sec, millis) {
+        min = min ||0;
+        sec = sec || 0;
+        millis = millis || 0;
+
+        var ms = millis + 1000 * (sec + 60 * (min + (60 * hour)));
+        return ms / MILLIS_PER_DAY;
+    };
+
+    // Leap Year Text
+    c3.leap_text = function (year) {
+        var isleap = c3.is_leap(year);
+        return isleap ? "Leap year" : "Normal year";
+    };
+
+    // Convert astronomical to civil time
+    c3.jd_to_timeparts = function (jd) {
+        //console.log("cal.jd_to_timeparts - in", jd);
+        var time, hour, min, sec, millis;
+        jd = jd + 0.5;
+        time = ((jd - Math.floor(jd)) * SECONDS_PER_DAY) + 0.5;
+        hour = Math.floor(time / 3600);
+        min = Math.floor((time / 60) % 60);
+        sec = Math.floor(time % 60);
+        millis = 0;
+        //console.log("cal.jd_to_timeparts - ex", hour, min, sec);
+        return [hour, min, sec, millis];
+    };
+
+    // Julian Day to JavaScript Date
+    c3.jd_to_jsdate = function (jd) {
+        var ymd = c3.jd_to_dateparts(jd);
+        return c3.dateparts_to_jsdate;
+    };
+
+    // Julian Day to Javascript Time
+    c3.jd_to_jstime = function (jd) {
+        return (jd - JS_EPOCH) * MILLIS_PER_DAY;
+    };
+
+    // Julian Day to Modified Julian Day
+    c3.jd_to_mjd = function (jd) {
+        return jd - MJD_EPOCH;
+    };
+
+    // Julian Day to Unix Time
+    c3.jd_to_unixtime = function (jd) {
+        return (jd - UNIX_EPOCH) * SECONDS_PER_DAY;
+    };
+
+    // Julian Day to YYYY-DDD (ISO Year and ISO DayOfYear)
+    c3.jd_to_yd = function (jd) {
+        var year = c3.jd_to_dateparts(jd)[0],
+            day = Math.floor(jd - c3.dateparts_to_jd(year, 1, 1)) + 1;
+        return [year, day];
+    };
+
+    // Julian Day to Year, Month, Day (resolved in subclasses)
+    c3.jd_to_dateparts = function (jd) {};
+
+    // Julian Day to Year, Month, Day (resolved in subclasses)
+    c3.jd_to_parts = function (jd) {
+        //console.log("cal.jd_to_parts - in", jd);
+        var dateparts = c3.jd_to_dateparts(jd), // depends on calendar
+            timeparts = c3.jd_to_timeparts(jd), // doesn't depend on calendar
+            ywd = c3.jd_to_ywd(jd),
+            yd = c3.jd_to_yd(jd),
+            parts = dateparts.concat(timeparts);
+        parts = parts.concat(ywd.slice(1));
+        parts = parts.concat(yd.slice(1));
+        //console.log("cal.jd_to_parts - ex", parts);
+        return parts;
+    };
+
+    // Julian Day to YYYY-WW-D (ISO Year, Week, Weekday)
+    c3.jd_to_ywd = function (jd) {
+        var year, week, wday;
+
+        year = c3.jd_to_dateparts(jd - 3)[0];
+        if (jd >= c3.ywd_to_jd(year + 1, 1, 1)) {
+            year++;
+        }
+        week = Math.floor((jd - c3.ywd_to_jd(year, 1, 1)) / 7) + 1;
+        wday = weekday(jd);
+        if (wday === 0) {
+            wday = 7;
+        }
+        //console.log("cal.jd_to_ywd - in", [year, week, wday]);
+        return [year, week, wday];
+    };
+
+    //===== jsdate to ...
+
+    // Javascript Date to Julian Day
+    c3.jsdate_to_jd = function (jsdate) {
+        console.log("cal.jsdate_to_jd - in", jsdate, assert, hmsOut);
+        var time = +jsdate;
+        console.log("time:", time, assert, hmsOut);
+
+        //var ymd = cal.jsdate_to_dateparts(jsdate);
+        //return cal.dateparts_to_jd(ymd[0], ymd[1], ymd[2]);
+        return c3.jstime_to_jd(+jsdate);
+        console.log("cal.jsdate_to_jd - ex", jd, assert, hmsOut);
+    };
+
+    // Javascript Date to [year, month, day, hour, min, sec, millis]
+    c3.jsdate_to_parts = function (jsdate) {
+        var year = jsdate.getUTCFullYear(),
+            month = jsdate.getUTCMonth() + 1,
+            day = jsdate.getUTCDate(),
+            hour = jsdate.getUTCHours(),
+            min = jsdate.getUTCMinutes(),
+            sec = jsdate.getUTCSeconds(),
+            millis = jsdate.getUTCMilliseconds();
+        return [year, month, day, hour, min, sec, millis];
+    };
+
+    // Javascript Date to [year, month, day]
+    c3.jsdate_to_dateparts = function (jsdate) {
+        return c3.jsdate_to_parts(jsdate).slice(0,2);
+    };
+
+    // Javascript Date to [hour, min, sec, millis]
+    c3.jsdate_to_timeparts = function (jsdate) {
+        return c3.jsdate_to_parts(jsdate).slice(3);
+    };
+
+    //===== jstime to ...
+
+    // Javascript Time to Julian Day
+    c3.jstime_to_jd = function (jstime) {
+        // With rounding
+        return JS_EPOCH + (Math.floor((jstime + 500) / MILLIS_PER_DAY)); //RE
+        //return JS_EPOCH + (Math.floor(time / MILLIS_PER_DAY));
+    };
+
+    // Javascript Time to Javascript Date
+    c3.jstime_to_jsdate = function (jstime) {
+        return new Date(jstime);
+    };
+
+    // Javascript Time to [year, month, day]
+    c3.jstime_to_dateparts = function (jstime) {
+        return c3.jsdate_to_parts(new Date(jstime));
+    };
+
+    // Javascript Time to [hour, min, sec, millis]
+    c3.jstime_to_timeparts = function (jstime) {
+        return c3.jsdate_to_timeparts(new Date(jstime));
+    };
+
+    //==================================
+
+    // Modified Julian Day to Julian Day
+    c3.mjd_to_jd = function (mjd) {
+        return mjd + MJD_EPOCH;
+    };
+
+    // Now (Current Date/Time) as Julian Day
+    c3.now_to_jd = function () {
+        return c3.jstime_to_jd(+new Date());
+    };
+
+    // Convert Year, Month, Day, Hour, Min, Sec, Millis to Julian Day
+    c3.parts_to_jd = function(year, month, day, hour, min, sec, millis) {
+        console.log("cal.parts_to_jd - in", arguments, assert, hmsOut);
+        var parts = get_parts(arguments),
+            time = parts_to_time(parts),
+            jd = c3.jstime_to_jd(time);
+        console.log("cal.parts_to_jd - ex", jd, assert, hmsOut);
+        return jd;
+    };
+
+    // Today as Julian Day
+    c3.today_jd = function () {
+        var jstime = +new Date();
+        return JS_EPOCH + (Math.floor(jstime / MILLIS_PER_DAY));
+    };
+
+    // Today as Javascript Date
+    c3.today_jsdate = function () {
+        return new Date();
+    };
+
+    // Today as Year, Month, Day
+    c3.today_dateparts = function () {
+        return c3.jsdate_to_dateparts(c3.today_jsdate());
+    };
+
+    // Unix Time to Julian Day
+    c3.unixtime_to_jd = function (time) {
+        return UNIX_EPOCH + (time / SECONDS_PER_DAY);
+    };
+
+    c3.weekday = function (jd) {
+        return weekday(jd);
+    };
+
+    // Weekday Name of Julian Day
+    c3.weekday_name = function(jd) {
+        return WEEKDAYS[weekday(jd)];
+    };
+
+    // ISO Year, Yearday to Julian Day
+    c3.yd_to_jd = function (year, day) {
+        var jd = c3.dateparts_to_jd(year, 1, 1);
+        return jd + (day - 1);
+    };
+
+    // Year, Month, Day to Date String
+    c3.dateparts_to_jsdatestring = function (year, month, day) {
+        var jsdate = c3.dateparts_to_jsdate(year, month, day);
+        return jsdate.toDateString();
+    };
+
+    // Year, Month, Day to ISO-String
+    c3.dateparts_to_isostring = function (year, month, day) {
+        var jsdate = c3.dateparts_to_jsdate(year, month, day);
+        return jsdate.toISOString();
+    };
+
+    // Year, Month, Day to Julian Day (resolved in subclasses)
+    c3.dateparts_to_jd = function (year, month, day) {};
+
+    // Year, Month, Day to Javascript Date
+    c3.dateparts_to_jsdate = function (year, month, day) {
+        var date = new Date(Date.UTC(0, month - 1, day));
+        date.setUTCFullYear(year);
+        return date;
+    };
+
+    // Year, Month, Day to String
+    c3.dateparts_to_string = function (year, month, day) {
+        var jsdate = c3.dateparts_to_jsdate(year, month, day);
+        return jsdate.toString();
+    };
+
+    // Year, Month, Day to Time String
+    c3.dateparts_to_timestring = function (year, month, day) {
+        var jsdate = c3.dateparts_to_jsdate(year, month, day);
+        return jsdate.toTimeString();
+    };
+
+    // Year, Month, Day to UTC-String
+    c3.dateparts_to_utcstring = function (year, month, day) {
+        var jsdate = c3.dateparts_to_jsdate(year, month, day);
+        return jsdate.toUTCString();
+    };
+
+    // ISO Year, Week, Weekday to Julian Day
+    c3.ywd_to_jd = function (year, week, day) {
+        var jd = c3.dateparts_to_jd(year - 1, 12, 28);
+        var offset = week > 0 ? previous_weekday(0, jd) : next_weekday(0, jd);
+        return day + (week * 7) + offset;
+    };
+
+    return c3;
+};
+var cal = c3();
+
+//==== Gregorian Calendar
+var gregorianCalendar = function () {
+
+    var GREGORIAN_EPOCH = 1721425.5;  // Julian Day of Gregorian 0001-01-01
+    var GREGORIAN_FIRST = 2299160.5;
+
+    var cal = c3();
+
+    // Modulus function which works for non-integers
+    function mod(a, b) {
+        return a - (b * Math.floor(a / b));
+    }
+
+    cal.epoch = function () {
+        return GREGORIAN_EPOCH;
+    };
+
+    cal.first = function () {
+        return GREGORIAN_FIRST;
+    };
+
+    // Is the given year in the Gregorian calendar a leap year?
+    cal.is_leap = function (year) {
+        //console.log("is_leap - in", year);
+        return ((year % 4) === 0) &&
+            (!(((year % 100) === 0) && ((year % 400) !== 0)));
+    };
+
+    // Julian Day to Gregorian Year, Month, Day
+    cal.jd_to_dateparts = function (jd) {
+
+        var wjd, depoch, quadricent, dqc, cent, dcent, quad, dquad,
+            yindex, year, yearday, leapadj, month, day, ymd;
+
+        wjd = Math.floor(jd - 0.5) + 0.5;
+        depoch = wjd - GREGORIAN_EPOCH;
+        quadricent = Math.floor(depoch / 146097);
+        dqc = mod(depoch, 146097);
+        cent = Math.floor(dqc / 36524);
+        dcent = mod(dqc, 36524);
+        quad = Math.floor(dcent / 1461);
+        dquad = mod(dcent, 1461);
+        yindex = Math.floor(dquad / 365);
+        year = (quadricent * 400) + (cent * 100) + (quad * 4) + yindex;
+        if (!((cent === 4) || (yindex === 4))) {
+            year++;
+        }
+        yearday = wjd - cal.dateparts_to_jd(year, 1, 1);
+        leapadj = ((wjd < cal.dateparts_to_jd(year, 3, 1)) ? 0
+            :
+            (cal.is_leap(year) ? 1 : 2)
+            );
+        month = Math.floor((((yearday + leapadj) * 12) + 373) / 367);
+        day = (wjd - cal.dateparts_to_jd(year, month, 1)) + 1;
+        ymd = [year, month, day];
+
+        return ymd;
+    };
+
+    // Gregorian Year, Month, Day to Julian Day
+    cal.dateparts_to_jd = function (year, month, day) {
+        return (GREGORIAN_EPOCH - 1)
+            + (365 * (year - 1))
+            + Math.floor((year - 1) / 4)
+            + (-Math.floor((year - 1) / 100))
+            + Math.floor((year - 1) / 400)
+            + Math.floor((((367 * month) - 362) / 12) +
+            ((month <= 2) ? 0 : (cal.is_leap(year) ? -1 : -2))
+            + day);
+    };
+
+    return cal;
+};
+var gregCal = gregorianCalendar();
+
+//==== Julian Calendar
+var julianCalendar = function () {
+
+    var JULIAN_FIRST = 1704986.5;  // 1. Jan 45 BC
+    var JULIAN_LAST = 2299159.5;
+
+    var cal = c3();
+
+    cal.epoch = function () {
+        return 0;
+    };
+
+    cal.last = function () {
+        return JULIAN_LAST;
+    };
+
+    cal.is_leap = function (year) {
+        return (year % 4) === ((year > 0) ? 0 : 3);
+    };
+
+    //-- Calculate Julian year, month, day from Julian Day
+    cal.jd_to_dateparts = function (jd) {
+        //console.log("julianCalendar.jd_to_dateparts - in", jd);
+        var b = Math.floor(jd + 0.5) + 1524,
+            c = Math.floor((b - 122.1) / 365.25),
+            d = Math.floor(365.25 * c),
+            e  = Math.floor((b - d) / 30.6001),
+            month = Math.floor((e < 14) ? (e - 1) : (e - 13)),
+            year = Math.floor((month > 2) ? (c - 4716) : (c - 4715)),
+            day = b - d - Math.floor(30.6001 * e);
+
+        // If year is less than 1, subtract one to convert from
+        // a zero based date system to the common era system in
+        // which the year -1 (1 B.C.E) is followed by year 1 (1 C.E.).
+
+        if (year < 1) {
+            year--;
+        }
+
+        //console.log("julianCalendar.jd_to_dateparts - ex", year, month, day);
+        return [year, month, day];
+    };
+
+    //-- Determine Julian Day number from Julian year, month, day
+    cal.dateparts_to_jd = function (year, month, day) {
+        //console.log("julianCalendar.dateparts_to_jd - in", year, month, day);
+        var jd;
+        // Adjust negative common era years to zero-based notation
+        if (year < 1) {
+            year++;
+        }
+
+        // Algorithm as given in Meeus, Astronomical Algorithms, Chapter 7, page 61
+        if (month <= 2) {
+            year--;
+            month += 12;
+        }
+
+        jd = (Math.floor((365.25 * (year + 4716))) +
+            Math.floor((30.6001 * (month + 1))) +  day) - 1524.5;
+        //console.log("julianCalendar.dateparts_to_jd - ex", jd);
+        return jd;
+    };
+
+    return cal;
+};
+var julCal = julianCalendar();
+
+//==== Christian Calendar
+var christianCalendar = function () {
+
+    var J1582 = 2299160.5; // Julian Day of Gregorian cut over, 1582-10-15 T 00:00:00
+    var AC_EPOCH = 1721423.5;
+    var BCE_LAST = 1721422.5;
+
+    var cal = c3();
+
+    cal.ac_epoch = function () {
+        return AC_EPOCH;
+    };
+
+    cal.bce_last = function () {
+        return BCE_LAST;
+    };
+
+    cal.is_leap = function (year) {
+        if (year > 1582) { return gregCal.is_leap(year); }
+        if (year < 1582) { return julCal.is_leap(year); }
+        return false;
+    };
+
+    cal.jd_is_gregorian = function (jd) {
+        return jd >= J1582;
+    };
+
+    cal.jd_is_julian = function (jd) {
+        return jd < J1582;
+    };
+
+    cal.dateparts_is_gregorian = function (year, month, day) {
+        if (year !== 1582) { return year > 1582; }
+        if (month !== 10) { return month > 10; }
+        return day >= 15;
+    };
+
+    cal.dateparts_is_julian = function (year, month, day) {
+        return !cal.dateparts_is_gregorian(year, month, day);
+    };
+
+    cal.dateparts_to_jd = function (year, month, day) {
+        var jd;
+        if (cal.dateparts_is_gregorian(year, month, day)) {
+            jd = gregCal.dateparts_to_jd(year, month, day);
+        } else {
+            jd = julCal.dateparts_to_jd(year, month, day);
+        }
+        return jd;
+    };
+
+    cal.jd_to_dateparts = function (jd) {
+        var ymd;
+        if (cal.jd_is_gregorian(jd)) {
+            ymd = gregCal.jd_to_dateparts(jd);
+        } else {
+            ymd = julCal.jd_to_dateparts(jd);
+        }
+        return ymd;
+    };
+
+    return cal;
+};
+var xCal = christianCalendar();
+
+</script>
+
+</head>
+
+<body>
+
+<form name="calendars">
+    
+    <table name="descriptions">
+
+        <tr name="xcal_desc"><td class="title">Christian Calendar</td>
+            <td class="data">
+                Julian: to 1582-10-04, Gregorian: from 15. Oct 1582; Year 0: NO (..., -2, -1, 1, 2, ...)
+            </td>
+            <td class="action"></td>
+        </tr>
+
+        <tr name="julcal_desc"><td class="title">Julian Calendar</td>
+            <td class="data">
+                Valid: from 1. Jan 45 BC to 4. Oct 1582; proleptic: before and after; Year 0: NO (..., -2, -1, 1, 2, ...);
+            </td>
+            <td class="action"></td>
+        </tr>
+
+        <tr name="gregcal_desc"><td class="title">Gregorian Calendar</td>
+            <td class="data">
+                Valid: from 15. Oct 1582; proleptic: before 1582-10-15; Year 0: YES (..., -2, -1, 0, 1, 2, ...);
+            </td>
+            <td class="action"></td>
+        </tr>
+
+        <tr name="jscal_desc"><td class="title">Javascript Calendar</td>
+            <td class="data">
+                Same as Gregorian Calendar; months 0..11
+            </td>
+            <td class="action"></td>
+        </tr>
+
+    </table><br>
+
+    <table name="calendars">
+
+        <tr name="iso_yearmonthday"><td class="title">ISO-8601 yyyy-mm-dd</td>
+            <td class="data">
+                <input type="text" name="isodateparts_year" value="" size="2">
+                <input type="text" name="isodateparts_month" value="" size="1">
+                <input type="text" name="isodateparts_day" value="" size="1">
+                <input type="text" name="iso_date" value="" size="30" class="ro" readonly>
+            </td>
+            <td class="action">
+                <input type="button" value="Calculate" onClick="update_isoymd();">
+            </td>
+        </tr>
+
+        <tr name="iso_weekday"><td class="title">ISO-8601 yyyy-Www-dd</td>
+            <td class="data">
+                <input type="text" name="isoywd_year" value="" size="2"
+                >W<input type="text" name="isoywd_week" value="" size="1">
+                <input type="text" name="isoywd_weekday" value="" size="1">
+            </td>
+            <td class="action">
+                <input type="button" value="Calculate" onClick="update_isoywd();">
+            </td>
+        </tr>
+
+        <tr name="iso_yearday"><td class="title">ISO-8601 yyyy-ddd</td>
+            <td class="data">
+                <input type="text" name="isoyd_year" value="" size="2">
+                <input type="text" name="isoyd_yearday" value="" size="1">
+            </td>
+            <td class="action">
+                <input type="button" value="Calculate" onClick="update_isoyd();">
+            </td>
+        </tr>
+
+        <tr name="xcal"><td class="title">Christian Calendar</td>
+            <td class="data">
+                <input type="text" name="xcal_year" value="" size="2">
+                <input type="text" name="xcal_month" size="1">
+                <input type="text" name="xcal_day" value="" size="1"> T
+                <input type="text" name="xcal_hour" value="" size="1">
+                <input type="text" name="xcal_min" value="" size="1">
+                <input type="text" name="xcal_sec" value="" size="1">
+                <input type="text" name="xcal_weekday" value="" size="8" class="ro" readonly>
+                <input type="text" name="xcal_leap" value="" size="9" class="ro" readonly>
+            </td>
+            <td class="action">
+                <input type="button" value="Calculate" onClick="update_xcal();">
+            </td>
+        </tr>
+
+        <tr name ="julcal"><td class="title">Julian Calendar</td>
+            <td class="data">
+                <input type="text" name="jul_year" value="" size="2">
+                <input type="text" name="jul_month" size="1">
+                <input type="text" name="jul_day" value="" size="1"> T
+                <input type="text" name="jul_hour" value="" size="1">
+                <input type="text" name="jul_min" value="" size="1">
+                <input type="text" name="jul_sec" value="" size="1">
+                <input type="text" name="jul_weekday" value="" size="8" class="ro" readonly>
+                <input type="text" name="jul_leap" value="" size="9" class="ro" readonly>
+            </td>
+            <td class="action">
+                <input type="button" value="Calculate" onClick="update_julcal();">
+            </td>
+        </tr>
+
+        <tr name="gregcal"><td class="title">Gregorian Calendar</td>
+            <td class="data">
+                <input type="text" name="greg_year" value="" size="2">
+                <input type="text" name="greg_month" size="1">
+                <input type="text" name="greg_day" value="" size="1"> T
+                <input type="text" name="greg_hour" value="" size="1">
+                <input type="text" name="greg_min" value="" size="1">
+                <input type="text" name="greg_sec" value="" size="1">
+                <input type="text" name="greg_weekday" value="" size="8" class="ro" readonly>
+                <input type="text" name="greg_leap" value="" size="9" class="ro" readonly>
+            </td>
+            <td class="action">
+                <input type="button" value="Calculate" onClick="update_gregcal();">
+            </td>
+        </tr>
+
+        <tr name="jscal"><td class="title">Javascript Date/Time</td>
+            <td class="data">
+                <input type="text" name="jsyear" value="" size="2">
+                <input type="text" name="jsmonth" value="" size="1">
+                <input type="text" name="jsday" value="" size="1"> T
+                <input type="text" name="jshour" value="" size="1">
+                <input type="text" name="jsmin" value="" size="1">
+                <input type="text" name="jssec" value="" size="1">
+                <input type="text" name="jsmillis" value="" size="1">
+            </td>
+            <td class="action">
+                <input type="button" name="jscalc" value="Calculate" onClick="update_jsdate();">
+            </td>
+        </tr>
+
+        <!--
+        <tr name="datestrings"><td></td>
+        <td>
+            <table class="inner">
+                <tr class="jscode">
+                    <td>toString</td>
+                    <td class="inner2">
+                        <input class="jsinfo" size="100" type="text" name="jsstring" readonly>
+                    </td>
+
+                </tr>
+                <tr class="jscode">
+                    <td>toDateString</td>
+                    <td>
+                        <input  class="jsinfo" size="100" type="text" name="jsdatestring"readonly>
+                    </td>
+                </tr>
+                <tr class="jscode">
+                    <td>toUTCString</td>
+                    <td>
+                        <input  class="jsinfo" size="100" type="text" name="jsutcstring" readonly>
+                    </td>
+                </tr>
+                <tr class="jscode">
+                    <td>toISOString</td>
+                    <td>
+                        <input  class="jsinfo" size="100" type="text" name="jsisostring" readonly>
+                    </td>
+                </tr>
+                <tr class="jscode">
+                    <td>toTimeString</td>
+                    <td>
+                        <input  class="jsinfo" size="100" type="text" name="jstimestring" readonly>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    -->
+
+        <tr name="jstime"><td class="title">Javascript Time</td>
+            <td class="data">
+                <input class="single" type="text" name="jstime" value="" size="30">
+            </td>
+            </td>
+            <td class="action">
+                <input type="button" value="Calculate" onClick="update_jstime();">
+            </td>
+        </tr>
+
+        <tr name="unixtime"><td class="title">Unix Time</td>
+            <td class="data">
+                <input class="single" type="text" name="unixtime" value="" size="30">
+            </td>
+            <td class="action">
+                <input type="button" value="Calculate" onClick="update_unixtime();">
+            </td>
+        </tr>
+
+        <tr name="modjulday"><td class="title">Modified Julian Day</td>
+            <td class="data">
+                <input class="single" type="text" name="mjd" value="" size="30">
+            </td>
+            <td class="action">
+                <input type="button" value="Calculate" onClick="update_modjulday();">
+            </td>
+        </tr>
+
+        <tr name="julday">
+            <td class="title">Julian Day<br>&nbsp;</td>
+            <td class="data">
+                <input class="single" type="text" name="jd" value="" size="30">
+            </td>
+            <td class="action">
+                <input type="button" value="Calculate" onClick="update_julday();">
+            </td>
+        </tr>
+
+    </table><br>
+
+    <table name="actions">
+        <tr>
+            <td class="action">
+                <input type="button" value="Today" onClick="update_today();">
+                <input type="button" value="Now" onClick="update_now();">
+                <input type="button" value="Unix Epoch" onClick="update_unix_epoch();">
+                <input type="button" value="JS Epoch" onClick="update_javascript_epoch();">
+                <input type="button" value="Julian Epoch" onClick="update_julian_epoch();">
+                <input type="button" value="Julian Last" onClick="update_julian_last();">
+                <input type="button" value="ModJulianDay Epoch" onClick="update_modjulianday_epoch();">
+                <input type="button" value="Gregorian Epoch" onClick="update_gregorian_epoch();">
+                <input type="button" value="Gregorian First" onClick="update_gregorian_first();">
+                <input type="button" value="BCE Last" onClick="update_bce_last();">
+                <input type="button" value="AC Epoch" onClick="update_ac_epoch();">
+                <br>
+                <input type="button" value="-100" onClick="year_minus_100();">
+                <input type="button" value="-10" onClick="year_minus_10();">
+                <input type="button" value="-1" onClick="year_minus_1();">
+                Year
+                <input type="button" value="+1" onClick="year_plus_1();">
+                <input type="button" value="+10" onClick="year_plus_10();">
+                <input type="button" value="+100" onClick="year_plus_100();">
+                :::
+                <input type="button" value="-12" onClick="month_minus_12();">
+                <input type="button" value="-3" onClick="month_minus_3();">
+                <input type="button" value="-1" onClick="month_minus_1();">
+                Month
+                <input type="button" value="+1" onClick="month_plus_1();">
+                <input type="button" value="+3" onClick="month_plus_3();">
+                <input type="button" value="+12" onClick="month_plus_12();">
+                :::
+                <input type="button" value="-1" onClick="week_minus_1();">
+                Week
+                <input type="button" value="+1" onClick="week_plus_1();">
+                :::
+                <input type="button" value="-1" onClick="day_minus_1();">
+                Day
+                <input type="button" value="+1" onClick="day_plus_1();">
+
+            </td>
+        </tr>
+    </table>
+
+</form>
+
+<script>
+
+    //TODO: "proleptic" hinter Daten einsetzen
+    //TODO: +/- bei year, month, week, day
+
+    var form = document.getElementsByName("calendars")[0];
+
+    function set_form(jd) {
+        //console.log("set_form - in", jd);
+        var parts = gregCal.jd_to_parts(jd),
+            year = parts[0],
+            month = parts[1],
+            day = parts[2],
+            hour = ("00" + parts[3]).slice(-2),
+            min = ("00" + parts[4]).slice(-2),
+            sec = ("00" + parts[5]).slice(-2),
+            millis = ("000" + parts[6]).slice(-3),
+            week = ("00" + parts[7]).slice(-2),
+            weekday = parts[8],
+            yearday = parts[9],
+            jul_dateparts = julCal.jd_to_dateparts(jd),
+            jul_year = jul_dateparts[0],
+            jul_month = jul_dateparts[1],
+            jul_day = jul_dateparts[2],
+            xcal_dateparts = xCal.jd_to_dateparts(jd),
+            xcal_year = xcal_dateparts[0],
+            xcal_month = xcal_dateparts[1],
+            xcal_day = xcal_dateparts[2];
+
+            // ywd = gregCal.jd_to_ywd(jd),
+            // yd = gregCal.jd_to_yd(jd);
+
+        //console.log("set_form - parts", parts);
+
+        //=== Christian Calendar
+        form.xcal_year.value = xcal_year;
+        form.xcal_month.vaöue = xcal_month;
+        form.xcal_day.value = xcal_day;
+        form.xcal_hour.value = hour;
+        form.xcal_min.value = min;
+        form.xcal_sec.value = sec;
+        form.xcal_weekday.value = cal.weekday_name(jd);
+        form.xcal_leap.value = xCal.leap_text(year);
+
+        //=== Julian Calendar
+        form.jul_year.value = jul_year;
+        form.jul_month.value = jul_month;
+        form.jul_day.value = jul_day;
+        form.jul_hour.value = hour;
+        form.jul_min.value = min;
+        form.jul_sec.value = sec;
+        form.jul_weekday.value = julCal.weekday_name(jd);
+        form.jul_leap.value = julCal.leap_text(jul_year);
+
+        //=== Gregorian Calendar
+        form.greg_year.value = year;
+        form.greg_month.value = month;
+        form.greg_day.value = day;
+        form.greg_hour.value = hour;
+        form.greg_min.value = min;
+        form.greg_sec.value = sec;
+        form.greg_weekday.value = cal.weekday_name(jd);
+        form.greg_leap.value = gregCal.leap_text(year);
+
+        //=== JavaScript Date
+        form.jsyear.value = year;
+        form.jsmonth.value = month - 1; // index: 0..11
+        form.jsday.value = day;
+        form.jshour.value = hour;
+        form.jsmin.value = min;
+        form.jssec.value = sec;
+        form.jsmillis.value = millis;
+
+        //=== ISO-8601 YYYY-MM-DD
+        form.isodateparts_year.value = year;
+        form.isodateparts_month.value = ("00" + month).slice(-2);
+        form.isodateparts_day.value = ("00" + day).slice(-2);
+        form.iso_date.value = gregCal.dateparts_to_isostring(year, month, day);
+
+        //=== ISO-8601 YYYY-WW-D
+        form.isoywd_year.value = year;
+        form.isoywd_week.value = week;
+        form.isoywd_weekday.value = weekday;
+
+        //=== ISO-8601 YYYY-DDD
+        form.isoyd_year.value = year;
+        form.isoyd_yearday.value = yearday;
+
+        //TODO Anzeigewerte für Einzelwerte stimmen noch nicht
+
+        //=== Unix Time
+        form.unixtime.value = cal.jd_to_unixtime(jd);
+        //=== Javascript Time
+        form.jstime.value = cal.jd_to_jstime(jd);
+        //=== Modified Julian Day
+        form.mjd.value = cal.jd_to_mjd(jd);
+        //=== Julian Day
+        form.jd.value = jd;
+
+        /*
+        //=== date strings
+        form.jsstring.value = cal.dateparts_to_string(year, month, day);
+        form.jsdatestring.value = cal.dateparts_to_jsdatestring(year, month, day);
+        form.jsutcstring.value = cal.dateparts_to_utcstring(year, month, day);
+        form.jsisostring.value = cal.dateparts_to_isostring(year, month, day);
+        form.jstimestring.value = cal.dateparts_to_timestring(year, month, day);
+        */
+    }
+
+    //=== ISO-8601 YYYY-MM-DD
+    function update_isoymd() {
+        var year = +form.isodateparts_year.value,
+            month = +form.isodateparts_month.value,
+            day = +form.isodateparts_day.value,
+            jd = gregCal.dateparts_to_jd(year, month, day);
+        set_form(jd);
+    }
+    //=== ISO-8601 YYYY-WW-D
+    function update_isoywd() {
+        var year = +form.isoywd_year.value,
+            week = +form.isoywd_week.value,
+            weekday = +form.isoywd_weekday.value,
+            jd = gregCal.ywd_to_jd(year, week, weekday);
+        set_form(jd);
+    }
+    //=== ISO-8601 YYYY-DDD
+    function update_isoyd() {
+        var year = +form.isoyd_year.value,
+            day = +form.isoyd_yearday.value,
+            jd = gregCal.yd_to_jd(year, day);
+        set_form(jd);
+    }
+    //=== Unix Time
+    function update_unixtime() {
+        var utime = +form.unixtime.value,
+            jd = cal.unixtime_to_jd(utime);
+        set_form(jd);
+    }
+    //=== Javascript Time
+    function update_jstime() {
+        var jstime = +form.jstime.value,
+            jd = cal.jstime_to_jd(jstime);
+        set_form(jd);
+    }
+    //=== Modified Julian Day
+    function update_modjulday() {
+        var mjd = +form.mjd.value,
+            jd = cal.mjd_to_jd(mjd);
+        set_form(jd);
+    }
+    //=== Julian Day
+    function update_julday() {
+        var jd = +form.jd.value;
+        set_form(jd);
+    }
+
+    //=== Julian Calendar
+    function update_julcal() {
+        var year = +form.jul_year.value,
+            month = form.jul_month.value + 1, // index: 0..11
+            day = +form.jul_day.value,
+            hour = +form.jul_hour.value,
+            min = +form.jul_min.value,
+            sec = +form.jul_sec.value,
+            jd = julCal.parts_to_jd(year, month, day, hour, min, sec);
+        set_form(jd);
+    }
+
+    //=== Gregorian Calendar
+    function update_gregcal() {
+        var year = +form.greg_year.value,
+            month = form.greg_month.value + 1, // index: 0..11
+            day = +form.greg_day.value,
+            hour = +form.greg_hour.value,
+            min = +form.greg_min.value,
+            sec = +form.greg_sec.value,
+            jd = gregCal.parts_to_jd(year, month, day, hour, min, sec);
+        set_form(jd);
+    }
+
+    //=== Christian Calendar
+    function update_xcal() {
+        var year = +form.xcal_year.value,
+            month = form.xcal_month.value + 1, // index: 0..11
+            day = +form.xcal_day.value,
+            hour = +form.xcal_hour.value,
+            min = +form.xcal_min.value,
+            sec = +form.xcal_sec.value,
+            jd = xCal.parts_to_jd(year, month, day, hour, min, sec);
+        set_form(jd);
+    }
+
+    function get_jsdate() {
+        return {
+            year: +form.jsyear.value,
+            month: +form.jsmonth.value + 1, // index: 0..11
+            day: +form.jsday.value,
+            hour: +form.jshour.value,
+            min: +form.jsmin.value,
+            sec: +form.jssec.value,
+            millis: +form.jsmillis.value
+        };
+    }
+
+    //=== JavaScript Date/Time
+    function update_jsdate() {
+        var year = +form.jsyear.value,
+            month = +form.jsmonth.value + 1, // index: 0..11
+            day = +form.jsday.value,
+            hour = +form.jshour.value,
+            min = +form.jsmin.value,
+            sec = +form.jssec.value,
+            millis = +form.jsmillis.value,
+            jd = gregCal.parts_to_jd(year, month, day, hour, min, sec, millis);
+        set_form(jd);
+    }
+
+    //=== Bottom Buttons
+    function update_today() { set_form(gregCal.today_jd()); }
+    function update_now() { set_form(gregCal.now_to_jd()); }
+    function update_unix_epoch() { set_form(gregCal.unix_epoch()); }
+    function update_javascript_epoch() { set_form(gregCal.javascript_epoch()); }
+    function update_julian_epoch() { set_form(julCal.epoch()); }
+    function update_julian_last() { set_form(julCal.last()); }
+    function update_modjulianday_epoch() { set_form(gregCal.mjd_epoch()); }
+    function update_gregorian_epoch() { set_form(gregCal.epoch()); }
+    function update_gregorian_first() { set_form(gregCal.first()); }
+    function update_bce_last() { set_form(xCal.bce_last()); }
+    function update_ac_epoch() { set_form(xCal.ac_epoch()); }
+
+    function yearPlusMinus(val, sign) {
+        var year = +form.jsyear.value;
+        form.jsyear.value = sign === "+" ? year + val : year - val;
+        update_jsdate();
+    }
+
+    function plusMinus(unit, val, sign) {
+        var field = {
+            "year" : [form.jsyear, update_jsdate],
+            "month" : [form.jsmonth,update_jsdate],
+            "week" : [form.isoywd_week,update_isoywd],
+            "day" : [form.jsday,update_jsdate],
+            "hour" : [form.jshour,update_jsdate],
+            "min" : [form.jsmin,update_jsdate],
+            "sec" : [form.jssec,update_jsdate],
+            "millis" : [form.jsmillis, update_jsdate]
+        }[unit];
+        var value = +field[0].value;
+        field[0].value = sign === "+" ? value + val : value - val;
+        field[1]();
+    }
+
+    function year_minus_1() { plusMinus("year", 1, "-"); }
+    function year_plus_1() { plusMinus("year", 1, "+"); }
+    function year_minus_10() { plusMinus("year", 10, "-"); }
+    function year_plus_10() { plusMinus("year", 10, "+"); }
+    function year_minus_100() { plusMinus("year", 100, "-"); }
+    function year_plus_100() { plusMinus("year", 100, "+"); }
+
+    function month_minus_1() { plusMinus("month", 1, "-"); }
+    function month_plus_1() { plusMinus("month", 1, "+"); }
+    function month_minus_3() { plusMinus("month", 3, "-"); }
+    function month_plus_3() { plusMinus("month", 3, "+"); }
+    function month_minus_12() { plusMinus("month", 12, "-"); }
+    function month_plus_12() { plusMinus("month", 12, "+"); }
+
+    function week_minus_1() { plusMinus("week", 1, "-"); }
+    function week_plus_1() { plusMinus("week", 1, "+"); }
+
+    function day_minus_1() { plusMinus("day", 1, "-"); }
+    function day_plus_1() { plusMinus("day", 1, "+"); }
+
+    // Init form with current date
+    set_form(gregCal.today_jd());
+
+    c.log(cal.jsdate(), date, assert, hmsOut);
+    c.log(cal.jsdate(1970), date, assert, hmsOut);
+    c.log(cal.jsdate(0), date, assert, hmsOut);
+    c.log(cal.jsdate(-1), date, assert, hmsOut);
+    c.log(cal.jsdate(1), date, assert, hmsOut);
+    c.log(cal.jsdate(-4713), cal.jstime(-4713), assert, hmsOut);
+
+</script>
+
+
+</body>
+</html>
